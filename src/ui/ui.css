@@ -1,0 +1,109 @@
+:root {
+  --bg: #14161a;
+  --tab: #1f2228;
+  --tab-hover: #2a2e36;
+  --tab-active: #343a45;
+  --text: #e6e8eb;
+  --muted: #8b919c;
+  --accent: #5b9dff;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1 system-ui, "Segoe UI", sans-serif;
+  user-select: none;
+  overflow: hidden;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 8px;
+  gap: 8px;
+  border-bottom: 1px solid #000;
+}
+
+.brand {
+  font-weight: 600;
+  color: var(--muted);
+  padding-right: 4px;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-width: 0;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 6px 0 12px;
+  border-radius: 6px;
+  background: var(--tab);
+  color: var(--text);
+  white-space: nowrap;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.tab:hover { background: var(--tab-hover); }
+
+.tab.active {
+  background: var(--tab-active);
+  border-color: var(--accent);
+}
+
+.tab.dragging { opacity: 0.5; }
+
+.tab .name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+
+.tab input {
+  width: 120px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 3px 4px;
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 20px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.icon:hover { background: #ffffff1a; color: var(--text); }
+
+.add {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--tab);
+  color: var(--text);
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.add:hover { background: var(--tab-hover); }
+.add:disabled { opacity: 0.4; cursor: default; }
