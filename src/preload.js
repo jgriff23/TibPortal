@@ -16,5 +16,6 @@ contextBridge.exposeInMainWorld('portal', {
   menu: (id) => ipcRenderer.invoke('profiles:menu', id),
   toggleMute: (id) => ipcRenderer.invoke('profiles:mute', id),
   toggleAlwaysOnTop: () => ipcRenderer.invoke('view:alwaysOnTop'),
+  focusToolbar: () => ipcRenderer.invoke('toolbar:focus'),
   onRename: (cb) => ipcRenderer.on('rename', (_e, id) => cb(id)),
 });

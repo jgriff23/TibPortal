@@ -8,6 +8,10 @@ const modeGrid = document.getElementById('mode-grid');
 const pinBtn = document.getElementById('pin');
 let editingId = null;
 let dragId = null;
+let renameStartedAt = 0;
+let draft = null; // text typed so far, kept when the bar redraws mid-rename
+let redrawing = false;
+let lastClick = { id: null, time: 0 };
 
 function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
@@ -18,6 +22,10 @@ function el(tag, props = {}, children = []) {
 
 function startRename(id) {
   editingId = id;
+  draft = null;
+  renameStartedAt = Date.now();
+  // Pull keyboard focus back from the game so the name box can be typed in.
+  window.portal.focusToolbar();
   render();
 }
 
@@ -31,7 +39,11 @@ function finishRename(id, value, commit) {
 }
 
 function render() {
+  // Redraws (e.g. a game's title changing) replace the name box; that must
+  // not count as the user clicking away.
+  redrawing = true;
   tabsEl.replaceChildren();
+  redrawing = false;
   const grid = state.mode === 'grid';
   modeTabs.classList.toggle('on', !grid);
   modeGrid.classList.toggle('on', grid);
@@ -52,7 +64,8 @@ function render() {
     if (index < 10) tab.append(el('span', { className: 'key', textContent: String((index + 1) % 10) }));
 
     if (editingId === p.id) {
-      const input = el('input', { value: p.name, maxLength: 32 });
+      const input = el('input', { value: draft ?? p.name, maxLength: 32 });
+      input.addEventListener('input', () => { draft = input.value; });
       let done = false;
       const finish = (commit) => {
         if (done) return;
@@ -63,13 +76,27 @@ function render() {
         if (e.key === 'Enter') finish(true);
         if (e.key === 'Escape') finish(false);
       });
-      input.addEventListener('blur', () => finish(true));
+      input.addEventListener('blur', () => {
+        if (redrawing || !input.isConnected) return;
+        // Switching tabs briefly moves focus to the game; don't close the
+        // name box for that, only when the user really clicks away.
+        if (Date.now() - renameStartedAt < 600) {
+          window.portal.focusToolbar();
+          setTimeout(() => input.focus(), 0);
+          return;
+        }
+        finish(true);
+      });
       tab.append(input);
-      queueMicrotask(() => { input.focus(); input.select(); });
+      const restoring = draft !== null;
+      queueMicrotask(() => {
+        input.focus();
+        if (restoring) input.setSelectionRange(input.value.length, input.value.length);
+        else input.select();
+      });
     } else {
       tab.append(el('span', { className: 'name', textContent: p.name }));
       if (p.attention) tab.append(el('span', { className: 'badge', title: 'Something changed in this session' }));
-      tab.addEventListener('dblclick', () => startRename(p.id));
     }
 
     const reload = el('button', { className: 'icon', textContent: '⟳', title: 'Reload' });
@@ -98,7 +125,17 @@ function render() {
     tab.append(close);
 
     tab.addEventListener('contextmenu', (e) => { e.preventDefault(); window.portal.menu(p.id); });
-    tab.addEventListener('click', () => {
+    // Detect double-clicks by profile, not by element: the first click
+    // switches tabs and redraws the bar, so a plain dblclick never fires.
+    tab.addEventListener('click', (e) => {
+      if (editingId === p.id) return;
+      const now = Date.now();
+      if (lastClick.id === p.id && now - lastClick.time < 450) {
+        lastClick = { id: null, time: 0 };
+        startRename(p.id);
+        return;
+      }
+      lastClick = { id: p.id, time: now };
       if (p.id !== state.activeId) window.portal.activate(p.id);
     });
 

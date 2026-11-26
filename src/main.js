@@ -189,7 +189,9 @@ function setAlwaysOnTop(on) {
 function addProfile() {
   if (store.list().length >= MAX_PROFILES) return null;
   const profile = store.add();
-  showActive();
+  // Keep focus in the toolbar so the new profile's name can be typed.
+  showActive({ focusGame: false });
+  toolbar.webContents.focus();
   return profile;
 }
 
@@ -350,10 +352,10 @@ function layout() {
   }
 }
 
-function showActive() {
+function showActive({ focusGame = true } = {}) {
   layout();
   const view = store.activeId && views.get(store.activeId);
-  if (view) view.webContents.focus();
+  if (view && focusGame) view.webContents.focus();
   clearAttentionInView();
   sendState();
 }
@@ -392,6 +394,8 @@ async function destroyProfileData(id) {
 
 function registerIpc() {
   ipcMain.handle('profiles:add', () => addProfile());
+
+  ipcMain.handle('toolbar:focus', () => toolbar.webContents.focus());
 
   ipcMain.handle('profiles:rename', (_e, id, name) => {
     const profile = store.rename(id, name);

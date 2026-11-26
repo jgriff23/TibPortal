@@ -180,3 +180,5 @@ html, body {
 }
 .pin:hover { filter: grayscale(1) opacity(0.8); }
 .pin.on { filter: none; border-color: var(--accent); }
+
+.tab input:focus { outline: none; box-shadow: 0 0 0 2px #5b9dff55; }
