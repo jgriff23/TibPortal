@@ -2,7 +2,9 @@
 
 const tabsEl = document.getElementById('tabs');
 const addBtn = document.getElementById('add');
-let state = { profiles: [], activeId: null, max: 10 };
+let state = { profiles: [], activeId: null, mode: 'tabs', hiddenInGrid: [], max: 10 };
+const modeTabs = document.getElementById('mode-tabs');
+const modeGrid = document.getElementById('mode-grid');
 let editingId = null;
 let dragId = null;
 
@@ -29,9 +31,14 @@ function finishRename(id, value, commit) {
 
 function render() {
   tabsEl.replaceChildren();
+  const grid = state.mode === 'grid';
+  modeTabs.classList.toggle('on', !grid);
+  modeGrid.classList.toggle('on', grid);
+
   state.profiles.forEach((p, index) => {
+    const inGrid = !state.hiddenInGrid.includes(p.id);
     const tab = el('div', {
-      className: 'tab' + (p.id === state.activeId ? ' active' : ''),
+      className: 'tab' + (p.id === state.activeId ? ' active' : '') + (grid && !inGrid ? ' off' : ''),
       title: 'Double-click to rename. Drag to reorder.',
       draggable: editingId !== p.id,
     });
@@ -59,8 +66,17 @@ function render() {
 
     const reload = el('button', { className: 'icon', textContent: '⟳', title: 'Reload' });
     reload.addEventListener('click', (e) => { e.stopPropagation(); window.portal.reload(p.id); });
-    const close = el('button', { className: 'icon', textContent: '×', title: 'Delete profile' });
+    const close = el('button', { className: 'icon close', textContent: '×', title: 'Delete profile' });
     close.addEventListener('click', (e) => { e.stopPropagation(); window.portal.remove(p.id); });
+    if (grid) {
+      const eye = el('button', {
+        className: 'icon eye' + (inGrid ? '' : ' off'),
+        textContent: inGrid ? '◉' : '○',
+        title: inGrid ? 'Hide from grid' : 'Show in grid',
+      });
+      eye.addEventListener('click', (e) => { e.stopPropagation(); window.portal.toggleInGrid(p.id); });
+      tab.append(eye);
+    }
     if (p.id === state.activeId && p.loaded) tab.append(reload);
     tab.append(close);
 
@@ -82,6 +98,17 @@ function render() {
   addBtn.disabled = state.profiles.length >= state.max;
   addBtn.title = addBtn.disabled ? `Maximum of ${state.max} profiles` : 'Add profile';
 }
+
+// Mouse wheel scrolls the tab strip sideways when it overflows.
+tabsEl.addEventListener('wheel', (e) => {
+  if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+    tabsEl.scrollLeft += e.deltaY;
+    e.preventDefault();
+  }
+}, { passive: false });
+
+modeTabs.addEventListener('click', () => window.portal.setMode('tabs'));
+modeGrid.addEventListener('click', () => window.portal.setMode('grid'));
 
 addBtn.addEventListener('click', async () => {
   const profile = await window.portal.add();

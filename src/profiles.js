@@ -13,7 +13,7 @@ const MAX_NAME_LENGTH = 32;
 class ProfileStore {
   constructor(filePath) {
     this.filePath = filePath;
-    this.data = { profiles: [], activeId: null };
+    this.data = { profiles: [], activeId: null, view: defaultView() };
     this.load();
   }
 
@@ -25,10 +25,14 @@ class ProfileStore {
           .filter((p) => p && typeof p.id === 'string' && typeof p.name === 'string')
           .slice(0, MAX_PROFILES);
         this.data.activeId = parsed.activeId || null;
+        this.data.view = { ...defaultView(), ...(parsed.view || {}) };
       }
     } catch {
       // Missing or unreadable file: start empty.
     }
+    const ids = new Set(this.data.profiles.map((p) => p.id));
+    if (!['tabs', 'grid'].includes(this.data.view.mode)) this.data.view.mode = 'tabs';
+    this.data.view.hiddenInGrid = (this.data.view.hiddenInGrid || []).filter((id) => ids.has(id));
     if (!this.get(this.data.activeId)) {
       this.data.activeId = this.data.profiles[0] ? this.data.profiles[0].id : null;
     }
@@ -95,6 +99,7 @@ class ProfileStore {
     const index = this.data.profiles.findIndex((p) => p.id === id);
     if (index === -1) return false;
     this.data.profiles.splice(index, 1);
+    this.data.view.hiddenInGrid = this.data.view.hiddenInGrid.filter((h) => h !== id);
     if (this.data.activeId === id) {
       const next = this.data.profiles[Math.min(index, this.data.profiles.length - 1)];
       this.data.activeId = next ? next.id : null;
@@ -117,10 +122,74 @@ class ProfileStore {
     this.data.activeId = id;
     this.save();
   }
+
+  // ---- View settings (tabs/grid, window placement) ----
+
+  get view() {
+    return { ...this.data.view, hiddenInGrid: [...this.data.view.hiddenInGrid] };
+  }
+
+  setMode(mode) {
+    if (!['tabs', 'grid'].includes(mode)) return;
+    this.data.view.mode = mode;
+    this.save();
+  }
+
+  setShownInGrid(id, shown) {
+    if (!this.get(id)) return;
+    const hidden = new Set(this.data.view.hiddenInGrid);
+    if (shown) hidden.delete(id);
+    else hidden.add(id);
+    this.data.view.hiddenInGrid = [...hidden];
+    this.save();
+  }
+
+  gridProfiles() {
+    const hidden = new Set(this.data.view.hiddenInGrid);
+    return this.data.profiles.filter((p) => !hidden.has(p.id)).map((p) => ({ ...p }));
+  }
+
+  setWindowState(bounds, maximized) {
+    this.data.view.bounds = bounds;
+    this.data.view.maximized = !!maximized;
+    this.save();
+  }
+}
+
+function defaultView() {
+  return { mode: 'tabs', hiddenInGrid: [], bounds: null, maximized: false };
+}
+
+// Columns x rows for n grid cells, tuned for a wide window.
+const GRID_SHAPES = {
+  1: [1, 1], 2: [2, 1], 3: [3, 1], 4: [2, 2], 5: [3, 2],
+  6: [3, 2], 7: [4, 2], 8: [4, 2], 9: [3, 3], 10: [5, 2],
+};
+
+function gridCells(n, area, gap = 2) {
+  if (n <= 0) return [];
+  const [cols, rows] = GRID_SHAPES[n] || [Math.ceil(Math.sqrt(n)), Math.ceil(n / Math.ceil(Math.sqrt(n)))];
+  const cells = [];
+  for (let i = 0; i < n; i++) {
+    const row = Math.floor(i / cols);
+    // Centre a short last row.
+    const inRow = row === rows - 1 ? n - cols * (rows - 1) : cols;
+    const col = i % cols;
+    const cellW = (area.width - gap * (cols - 1)) / cols;
+    const cellH = (area.height - gap * (rows - 1)) / rows;
+    const offset = ((cols - inRow) * (cellW + gap)) / 2;
+    cells.push({
+      x: Math.round(area.x + offset + col * (cellW + gap)),
+      y: Math.round(area.y + row * (cellH + gap)),
+      width: Math.max(0, Math.round(cellW)),
+      height: Math.max(0, Math.round(cellH)),
+    });
+  }
+  return cells;
 }
 
 function partitionFor(id) {
   return `persist:tib-${id}`;
 }
 
-module.exports = { ProfileStore, partitionFor, MAX_PROFILES, MAX_NAME_LENGTH };
+module.exports = { ProfileStore, partitionFor, gridCells, MAX_PROFILES, MAX_NAME_LENGTH };

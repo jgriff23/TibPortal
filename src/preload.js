@@ -10,5 +10,7 @@ contextBridge.exposeInMainWorld('portal', {
   remove: (id) => ipcRenderer.invoke('profiles:remove', id),
   activate: (id) => ipcRenderer.invoke('profiles:activate', id),
   move: (id, toIndex) => ipcRenderer.invoke('profiles:move', id, toIndex),
+  setMode: (mode) => ipcRenderer.invoke('view:mode', mode),
+  toggleInGrid: (id) => ipcRenderer.invoke('grid:toggle', id),
   reload: (id) => ipcRenderer.invoke('profiles:reload', id),
 });

@@ -77,3 +77,38 @@ test('survives a corrupt file', () => {
   const store = new ProfileStore(file);
   assert.deepStrictEqual(store.list(), []);
 });
+
+const { gridCells } = require('../src/profiles');
+
+test('grid cells fill the area without overlapping', () => {
+  const area = { x: 0, y: 44, width: 1280, height: 756 };
+  for (let n = 1; n <= MAX_PROFILES; n++) {
+    const cells = gridCells(n, area, 2);
+    assert.strictEqual(cells.length, n);
+    for (const c of cells) {
+      assert.ok(c.x >= area.x && c.y >= area.y, `n=${n} inside top-left`);
+      assert.ok(c.x + c.width <= area.x + area.width + 1, `n=${n} inside right`);
+      assert.ok(c.y + c.height <= area.y + area.height + 1, `n=${n} inside bottom`);
+    }
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+      const a = cells[i], b = cells[j];
+      const overlap = a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+      assert.ok(!overlap, `n=${n} cells ${i},${j} overlap`);
+    }
+  }
+  assert.deepStrictEqual(gridCells(4, area, 0).map((c) => [c.x, c.y]), [[0, 44], [640, 44], [0, 422], [640, 422]]);
+});
+
+test('grid visibility and view mode persist', () => {
+  const file = tmpFile();
+  const store = new ProfileStore(file);
+  const a = store.add('A');
+  const b = store.add('B');
+  store.setMode('grid');
+  store.setShownInGrid(a.id, false);
+  const reloaded = new ProfileStore(file);
+  assert.strictEqual(reloaded.view.mode, 'grid');
+  assert.deepStrictEqual(reloaded.gridProfiles().map((p) => p.id), [b.id]);
+  reloaded.remove(a.id);
+  assert.deepStrictEqual(reloaded.view.hiddenInGrid, []);
+});

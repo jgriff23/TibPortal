@@ -44,6 +44,8 @@ html, body {
 }
 
 .tab {
+  flex: 0 1 auto;
+  min-width: 64px;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -66,7 +68,11 @@ html, body {
 
 .tab.dragging { opacity: 0.5; }
 
-.tab .name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+.tab .name { flex: 1 1 auto; min-width: 0; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+
+/* Keep tabs compact: the delete button only shows on hover or the active tab. */
+.tab .close { display: none; }
+.tab:hover .close, .tab.active .close { display: block; }
 
 .tab input {
   width: 120px;
@@ -79,6 +85,7 @@ html, body {
 }
 
 .icon {
+  flex: none;
   width: 20px;
   height: 20px;
   border: 0;
@@ -107,3 +114,30 @@ html, body {
 
 .add:hover { background: var(--tab-hover); }
 .add:disabled { opacity: 0.4; cursor: default; }
+
+.spacer { flex: 1; }
+
+.modes {
+  flex: none;
+  display: flex;
+  background: var(--tab);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.mode {
+  height: 26px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.mode:hover { color: var(--text); }
+.mode.on { background: var(--tab-active); color: var(--text); }
+
+.tab.off .name { color: var(--muted); text-decoration: line-through; }
+.icon.eye.off { opacity: 0.5; }

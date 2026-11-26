@@ -5,21 +5,25 @@ const {
   app,
   BaseWindow,
   WebContentsView,
+  View,
   ipcMain,
   dialog,
   session,
   shell,
   Menu,
+  screen,
 } = require('electron');
-const { ProfileStore, partitionFor, MAX_PROFILES } = require('./profiles');
+const { ProfileStore, partitionFor, gridCells, MAX_PROFILES } = require('./profiles');
 
 // The game URL. TIBPORTAL_URL lets us point at a local page while testing.
 const GAME_URL = process.env.TIBPORTAL_URL || 'https://tibidle.com';
 const GAME_ORIGIN = new URL(GAME_URL).origin;
 const TOOLBAR_HEIGHT = 44;
+const GRID_GAP = 2;
 
 let win = null;
 let toolbar = null;
+let frame = null; // accent outline behind the active grid cell
 let store = null;
 const views = new Map(); // profile id -> WebContentsView
 
@@ -73,6 +77,14 @@ function createGameView(profile) {
   });
 
   wc.on('page-title-updated', () => sendState());
+  // Clicking into a grid cell makes that profile the active one.
+  wc.on('focus', () => {
+    if (store.activeId !== profile.id && store.get(profile.id)) {
+      store.setActive(profile.id);
+      layout();
+      sendState();
+    }
+  });
   wc.on('did-fail-load', (_e, code, desc, url, isMainFrame) => {
     if (isMainFrame && code !== -3) {
       console.warn(`[${profile.name}] failed to load ${url}: ${desc}`);
@@ -90,28 +102,68 @@ function viewFor(id) {
   return views.get(id) || createGameView(profile);
 }
 
+function gameArea() {
+  const { width, height } = win.getContentBounds();
+  return { x: 0, y: TOOLBAR_HEIGHT, width, height: Math.max(0, height - TOOLBAR_HEIGHT) };
+}
+
+function ensureAttached(id) {
+  const view = viewFor(id);
+  if (view && !win.contentView.children.includes(view)) {
+    win.contentView.addChildView(view);
+  }
+  return view;
+}
+
 function layout() {
   if (!win) return;
-  const { width, height } = win.getContentBounds();
+  const { width } = win.getContentBounds();
   toolbar.setBounds({ x: 0, y: 0, width, height: TOOLBAR_HEIGHT });
-  const gameBounds = { x: 0, y: TOOLBAR_HEIGHT, width, height: Math.max(0, height - TOOLBAR_HEIGHT) };
+  const area = gameArea();
+  const placements = new Map();
+
+  if (store.view.mode === 'grid') {
+    const shown = store.gridProfiles();
+    const inset = {
+      x: area.x + GRID_GAP,
+      y: area.y + GRID_GAP,
+      width: area.width - GRID_GAP * 2,
+      height: area.height - GRID_GAP * 2,
+    };
+    const cells = gridCells(shown.length, inset, GRID_GAP);
+    shown.forEach((p, i) => placements.set(p.id, cells[i]));
+  } else if (store.activeId) {
+    placements.set(store.activeId, area);
+  }
+
+  for (const id of placements.keys()) ensureAttached(id);
   for (const [id, view] of views) {
-    const visible = id === store.activeId;
-    view.setVisible(visible);
-    if (visible) view.setBounds(gameBounds);
+    const bounds = placements.get(id);
+    view.setVisible(!!bounds);
+    if (bounds) view.setBounds(bounds);
+  }
+
+  // Outline the active cell in grid mode.
+  const activeCell = store.view.mode === 'grid' && placements.size > 1 && placements.get(store.activeId);
+  if (activeCell) {
+    frame.setBounds({
+      x: activeCell.x - GRID_GAP,
+      y: activeCell.y - GRID_GAP,
+      width: activeCell.width + GRID_GAP * 2,
+      height: activeCell.height + GRID_GAP * 2,
+    });
+    // Keep the frame at the back, behind the game views.
+    win.contentView.addChildView(frame, 0);
+    frame.setVisible(true);
+  } else {
+    frame.setVisible(false);
   }
 }
 
 function showActive() {
-  const id = store.activeId;
-  if (id) {
-    const view = viewFor(id);
-    if (view && !win.contentView.children.includes(view)) {
-      win.contentView.addChildView(view);
-    }
-  }
   layout();
-  if (id && views.get(id)) views.get(id).webContents.focus();
+  const view = store.activeId && views.get(store.activeId);
+  if (view) view.webContents.focus();
   sendState();
 }
 
@@ -124,6 +176,8 @@ function sendState() {
       title: views.has(p.id) ? views.get(p.id).webContents.getTitle() : '',
     })),
     activeId: store.activeId,
+    mode: store.view.mode,
+    hiddenInGrid: store.view.hiddenInGrid,
     max: MAX_PROFILES,
   });
 }
@@ -175,12 +229,16 @@ function registerIpc() {
   });
 
   ipcMain.handle('profiles:activate', (_e, id) => {
+    if (store.view.mode === 'grid' && store.view.hiddenInGrid.includes(id)) {
+      store.setShownInGrid(id, true);
+    }
     store.setActive(id);
     showActive();
   });
 
   ipcMain.handle('profiles:move', (_e, id, toIndex) => {
     store.move(id, toIndex);
+    layout();
     sendState();
   });
 
@@ -189,13 +247,30 @@ function registerIpc() {
     if (view) view.webContents.reload();
   });
 
+  ipcMain.handle('view:mode', (_e, mode) => {
+    store.setMode(mode);
+    showActive();
+  });
+
+  ipcMain.handle('grid:toggle', (_e, id) => {
+    const hidden = store.view.hiddenInGrid.includes(id);
+    store.setShownInGrid(id, hidden);
+    showActive();
+  });
+
   ipcMain.handle('state:get', () => sendState());
 }
 
+function isOnScreen(b) {
+  return screen.getAllDisplays().some(({ workArea: d }) =>
+    b.x < d.x + d.width - 50 && b.x + b.width > d.x + 50 && b.y >= d.y - 10 && b.y < d.y + d.height - 50);
+}
+
 function createWindow() {
+  const saved = store.view;
+  const bounds = saved.bounds && isOnScreen(saved.bounds) ? saved.bounds : { width: 1280, height: 800 };
   win = new BaseWindow({
-    width: 1280,
-    height: 800,
+    ...bounds,
     minWidth: 640,
     minHeight: 400,
     title: 'TibPortal',
@@ -214,7 +289,17 @@ function createWindow() {
   toolbar.webContents.loadFile(path.join(__dirname, 'ui', 'index.html'));
   toolbar.webContents.on('did-finish-load', () => sendState());
 
+  if (saved.maximized) win.maximize();
+
+  frame = new View();
+  frame.setBackgroundColor('#5b9dff');
+  frame.setVisible(false);
+  win.contentView.addChildView(frame);
+
   win.on('resize', layout);
+  win.on('close', () => {
+    store.setWindowState(win.getNormalBounds(), win.isMaximized());
+  });
   win.on('closed', () => {
     win = null;
   });
