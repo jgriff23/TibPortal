@@ -450,6 +450,7 @@ function createWindow() {
     minWidth: 640,
     minHeight: 400,
     title: 'TibPortal',
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
     backgroundColor: '#14161a',
   });
 

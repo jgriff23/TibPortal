@@ -2,6 +2,15 @@
 
 A desktop app for running several [TibIdle](https://tibidle.com) sessions at once, each with its own saved login. You don't need incognito windows.
 
+## Download (Windows)
+
+Grab the latest build from the [Releases page](../../releases):
+
+- **TibPortal-Setup-x.y.z.exe** installs TibPortal with Start menu and desktop shortcuts.
+- **TibPortal-Portable-x.y.z.exe** runs without installing. Your profiles are stored in your user folder either way.
+
+The app isn't code-signed yet, so Windows SmartScreen may say "Windows protected your PC" the first time. Click **More info → Run anyway**.
+
 ## How it works
 
 Each **profile** (for example "Main" or "Alt 1") gets its own separate browser storage: cookies, local storage and cache. Logins never clash between profiles, and every profile stays logged in between launches. You can have up to 10 profiles.
@@ -48,9 +57,22 @@ npm test       # unit tests
 
 Set `TIBPORTAL_URL` to point the app at a different page while testing.
 
+### Building the .exe
+
+```sh
+npm run dist   # on Windows: writes the installer and portable .exe to dist/
+```
+
+GitHub Actions builds both on every push (download them from the run's **Artifacts**). Pushing a tag such as `v0.1.0` also publishes them to a GitHub Release:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
+
 ## Roadmap
 
 1. ~~Core app with saved profiles~~
 2. ~~Tabs and split grid view (up to 10 sessions)~~
 3. ~~Polish: colors, mute, notifications, always-on-top, keyboard shortcuts~~
-4. Windows installer and portable .exe
+4. ~~Windows installer and portable .exe~~
+5. Later: Linux builds (AppImage, .deb), code signing

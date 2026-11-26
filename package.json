@@ -8,9 +8,56 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "dist": "electron-builder --win",
+    "dist:dir": "electron-builder --win --dir"
   },
   "devDependencies": {
-    "electron": "45.5.0"
+    "electron": "45.5.0",
+    "electron-builder": "26.18.0"
+  },
+  "productName": "TibPortal",
+  "build": {
+    "appId": "com.tibportal.app",
+    "productName": "TibPortal",
+    "copyright": "Copyright \u00a9 2026 jgriff23",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TibPortal",
+      "artifactName": "TibPortal-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "TibPortal-Portable-${version}.${ext}"
+    },
+    "publish": null
   }
 }
