@@ -5,6 +5,7 @@ const addBtn = document.getElementById('add');
 let state = { profiles: [], activeId: null, mode: 'tabs', hiddenInGrid: [], max: 10 };
 const modeTabs = document.getElementById('mode-tabs');
 const modeGrid = document.getElementById('mode-grid');
+const pinBtn = document.getElementById('pin');
 let editingId = null;
 let dragId = null;
 
@@ -39,10 +40,16 @@ function render() {
     const inGrid = !state.hiddenInGrid.includes(p.id);
     const tab = el('div', {
       className: 'tab' + (p.id === state.activeId ? ' active' : '') + (grid && !inGrid ? ' off' : ''),
-      title: 'Double-click to rename. Drag to reorder.',
+      title: `${p.name}${p.title ? ' · ' + p.title : ''}\nDouble-click to rename, right-click for options, drag to reorder.`,
       draggable: editingId !== p.id,
     });
     tab.setAttribute('role', 'tab');
+    if (p.color) {
+      const swatch = el('span', { className: 'swatch' });
+      swatch.style.background = p.color;
+      tab.append(swatch);
+    }
+    if (index < 10) tab.append(el('span', { className: 'key', textContent: String((index + 1) % 10) }));
 
     if (editingId === p.id) {
       const input = el('input', { value: p.name, maxLength: 32 });
@@ -61,6 +68,7 @@ function render() {
       queueMicrotask(() => { input.focus(); input.select(); });
     } else {
       tab.append(el('span', { className: 'name', textContent: p.name }));
+      if (p.attention) tab.append(el('span', { className: 'badge', title: 'Something changed in this session' }));
       tab.addEventListener('dblclick', () => startRename(p.id));
     }
 
@@ -68,6 +76,15 @@ function render() {
     reload.addEventListener('click', (e) => { e.stopPropagation(); window.portal.reload(p.id); });
     const close = el('button', { className: 'icon close', textContent: '×', title: 'Delete profile' });
     close.addEventListener('click', (e) => { e.stopPropagation(); window.portal.remove(p.id); });
+    if (p.muted || p.audible) {
+      const sound = el('button', {
+        className: 'icon sound' + (p.muted ? ' muted' : ''),
+        textContent: p.muted ? '🔇' : '🔊',
+        title: p.muted ? 'Unmute (Ctrl+M)' : 'Mute (Ctrl+M)',
+      });
+      sound.addEventListener('click', (e) => { e.stopPropagation(); window.portal.toggleMute(p.id); });
+      tab.append(sound);
+    }
     if (grid) {
       const eye = el('button', {
         className: 'icon eye' + (inGrid ? '' : ' off'),
@@ -80,6 +97,7 @@ function render() {
     if (p.id === state.activeId && p.loaded) tab.append(reload);
     tab.append(close);
 
+    tab.addEventListener('contextmenu', (e) => { e.preventDefault(); window.portal.menu(p.id); });
     tab.addEventListener('click', () => {
       if (p.id !== state.activeId) window.portal.activate(p.id);
     });
@@ -95,6 +113,8 @@ function render() {
     tabsEl.append(tab);
   });
 
+  pinBtn.classList.toggle('on', !!state.alwaysOnTop);
+  pinBtn.title = state.alwaysOnTop ? 'Stop keeping window on top' : 'Keep window on top';
   addBtn.disabled = state.profiles.length >= state.max;
   addBtn.title = addBtn.disabled ? `Maximum of ${state.max} profiles` : 'Add profile';
 }
@@ -110,10 +130,14 @@ tabsEl.addEventListener('wheel', (e) => {
 modeTabs.addEventListener('click', () => window.portal.setMode('tabs'));
 modeGrid.addEventListener('click', () => window.portal.setMode('grid'));
 
+pinBtn.addEventListener('click', () => window.portal.toggleAlwaysOnTop());
+
 addBtn.addEventListener('click', async () => {
   const profile = await window.portal.add();
-  startRename(profile.id);
+  if (profile) startRename(profile.id);
 });
+
+window.portal.onRename((id) => startRename(id));
 
 window.portal.onState((next) => {
   state = next;

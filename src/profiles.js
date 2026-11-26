@@ -10,6 +10,19 @@ const crypto = require('crypto');
 const MAX_PROFILES = 10;
 const MAX_NAME_LENGTH = 32;
 
+// Tab colors offered in the right-click menu.
+const COLORS = {
+  none: null,
+  red: '#e5484d',
+  orange: '#f76b15',
+  yellow: '#f5d90a',
+  green: '#46a758',
+  teal: '#12a594',
+  blue: '#3e63dd',
+  purple: '#8e4ec6',
+  pink: '#d6409f',
+};
+
 class ProfileStore {
   constructor(filePath) {
     this.filePath = filePath;
@@ -23,7 +36,8 @@ class ProfileStore {
       if (parsed && Array.isArray(parsed.profiles)) {
         this.data.profiles = parsed.profiles
           .filter((p) => p && typeof p.id === 'string' && typeof p.name === 'string')
-          .slice(0, MAX_PROFILES);
+          .slice(0, MAX_PROFILES)
+          .map((p) => ({ color: null, muted: false, notify: true, ...p }));
         this.data.activeId = parsed.activeId || null;
         this.data.view = { ...defaultView(), ...(parsed.view || {}) };
       }
@@ -77,6 +91,9 @@ class ProfileStore {
     const profile = {
       id: crypto.randomUUID(),
       name: ProfileStore.cleanName(name) || this.nextDefaultName(),
+      color: null,
+      muted: false,
+      notify: true,
       createdAt: Date.now(),
     };
     this.data.profiles.push(profile);
@@ -117,6 +134,19 @@ class ProfileStore {
     this.save();
   }
 
+  // Per-profile settings: color, muted, notify.
+  update(id, patch) {
+    const profile = this.get(id);
+    if (!profile) throw new Error('Profile not found.');
+    if ('color' in patch) {
+      profile.color = Object.values(COLORS).includes(patch.color) ? patch.color : null;
+    }
+    if ('muted' in patch) profile.muted = !!patch.muted;
+    if ('notify' in patch) profile.notify = !!patch.notify;
+    this.save();
+    return { ...profile };
+  }
+
   setActive(id) {
     if (!this.get(id)) return;
     this.data.activeId = id;
@@ -149,6 +179,11 @@ class ProfileStore {
     return this.data.profiles.filter((p) => !hidden.has(p.id)).map((p) => ({ ...p }));
   }
 
+  setAlwaysOnTop(on) {
+    this.data.view.alwaysOnTop = !!on;
+    this.save();
+  }
+
   setWindowState(bounds, maximized) {
     this.data.view.bounds = bounds;
     this.data.view.maximized = !!maximized;
@@ -157,7 +192,7 @@ class ProfileStore {
 }
 
 function defaultView() {
-  return { mode: 'tabs', hiddenInGrid: [], bounds: null, maximized: false };
+  return { mode: 'tabs', hiddenInGrid: [], bounds: null, maximized: false, alwaysOnTop: false };
 }
 
 // Columns x rows for n grid cells, tuned for a wide window.
@@ -192,4 +227,4 @@ function partitionFor(id) {
   return `persist:tib-${id}`;
 }
 
-module.exports = { ProfileStore, partitionFor, gridCells, MAX_PROFILES, MAX_NAME_LENGTH };
+module.exports = { ProfileStore, partitionFor, gridCells, COLORS, MAX_PROFILES, MAX_NAME_LENGTH };

@@ -112,3 +112,25 @@ test('grid visibility and view mode persist', () => {
   reloaded.remove(a.id);
   assert.deepStrictEqual(reloaded.view.hiddenInGrid, []);
 });
+
+const { COLORS } = require('../src/profiles');
+
+test('per-profile color, mute and notify settings persist', () => {
+  const file = tmpFile();
+  const store = new ProfileStore(file);
+  const a = store.add('A');
+  assert.strictEqual(a.notify, true);
+  store.update(a.id, { color: COLORS.green, muted: true, notify: false });
+  store.update(a.id, { color: 'javascript:alert(1)' });
+  const p = new ProfileStore(file).get(a.id);
+  assert.strictEqual(p.color, null);
+  assert.strictEqual(p.muted, true);
+  assert.strictEqual(p.notify, false);
+});
+
+test('always-on-top persists', () => {
+  const file = tmpFile();
+  const store = new ProfileStore(file);
+  store.setAlwaysOnTop(true);
+  assert.strictEqual(new ProfileStore(file).view.alwaysOnTop, true);
+});

@@ -141,3 +141,42 @@ html, body {
 
 .tab.off .name { color: var(--muted); text-decoration: line-through; }
 .icon.eye.off { opacity: 0.5; }
+
+.tab { position: relative; overflow: hidden; }
+.tab .swatch {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+}
+
+.tab .badge {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f5a524;
+  box-shadow: 0 0 0 2px #f5a52433;
+}
+
+.tab .key {
+  flex: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.icon.sound.muted { color: #e5484d; }
+
+.pin {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--tab);
+  font-size: 14px;
+  cursor: pointer;
+  filter: grayscale(1) opacity(0.5);
+}
+.pin:hover { filter: grayscale(1) opacity(0.8); }
+.pin.on { filter: none; border-color: var(--accent); }
