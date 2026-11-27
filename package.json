@@ -1,6 +1,6 @@
 {
   "name": "tibportal",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Run several TibIdle sessions side by side, each with its own saved login.",
   "main": "src/main.js",
   "author": "jgriff23",
@@ -49,6 +49,7 @@
     },
     "nsis": {
       "oneClick": false,
+      "include": "build/installer.nsh",
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,

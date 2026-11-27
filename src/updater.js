@@ -5,8 +5,8 @@
 // While the app is running it asks GitHub Releases every 30 minutes (and
 // when you come back to the window) whether a newer version exists. If so it
 // downloads it in the background, then asks whether to restart now.
-// "Restart now" installs silently (no installer wizard) and reopens
-// TibPortal. If you choose "Later", it installs silently the next time you
+// "Restart now" runs the installer with no questions: only a progress bar
+// shows (see build/installer.nsh), then TibPortal reopens. If you choose "Later", it installs silently the next time you
 // close the app. "Check for updates…" in the ⋯ menu checks right away.
 //
 // The portable .exe can't replace itself, so it only checks and tells you
@@ -62,10 +62,11 @@ function startAutoUpdates(getWindow) {
       cancelId: 1,
       title: 'Update ready',
       message: `TibPortal ${version} has been downloaded.`,
-      detail: 'Restart now to update. TibPortal closes, installs the update and reopens by itself. Your profiles and logins are kept. If you choose Later, it will update the next time you close TibPortal.',
+      detail: 'Restart now to update. TibPortal closes, shows a progress bar while it installs, and reopens by itself. Your profiles and logins are kept. If you choose Later, it will update the next time you close TibPortal.',
     });
-    // Silent install (/S) and relaunch afterwards (--force-run).
-    if (response === 0) autoUpdater.quitAndInstall(true, true);
+    // Not silent, so the installer's progress bar shows. With --updated the
+    // installer skips its questions and reopens the app when done.
+    if (response === 0) autoUpdater.quitAndInstall(false, true);
   }
 
   async function promptDownload(v) {
@@ -104,7 +105,15 @@ function startAutoUpdates(getWindow) {
     manual = false;
   });
 
+  // Download progress on the taskbar button.
+  const taskbar = (value) => {
+    const win = getWindow();
+    if (win && !win.isDestroyed()) win.setProgressBar(value);
+  };
+  autoUpdater.on('download-progress', (p) => taskbar(Math.max(0, Math.min(1, p.percent / 100))));
+
   autoUpdater.on('update-downloaded', (u) => {
+    taskbar(-1);
     state = 'ready';
     version = u.version;
     if (prompted.has(u.version)) return;
@@ -123,7 +132,10 @@ function startAutoUpdates(getWindow) {
       });
     }
     manual = false;
-    if (state === 'downloading') state = 'idle';
+    if (state === 'downloading') {
+      state = 'idle';
+      taskbar(-1);
+    }
   });
 
   function check() {

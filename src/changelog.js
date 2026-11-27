@@ -3,6 +3,13 @@
 // Shown in the "What's new" popup after an update. Newest first.
 module.exports = [
   {
+    version: '0.4.3',
+    notes: [
+      'Installing an update now shows a progress bar, then TibPortal reopens by itself. There are still no questions to click through.',
+      'The taskbar button shows download progress while an update downloads.',
+    ],
+  },
+  {
     version: '0.4.2',
     notes: [
       'New "Check for updates…" item in the ⋯ menu.',
