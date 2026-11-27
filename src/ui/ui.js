@@ -97,6 +97,8 @@ function render() {
     } else {
       tab.append(el('span', { className: 'name', textContent: p.name }));
       if (p.attention) tab.append(el('span', { className: 'badge', title: 'Something changed in this session' }));
+      if (p.zoom && Math.abs(p.zoom - 1) > 0.001) tab.append(el('span', { className: 'zoom', textContent: `${Math.round(p.zoom * 100)}%`, title: 'Zoom (Ctrl+Shift+0 resets)' }));
+      if (p.poppedOut) tab.append(el('span', { className: 'popped', textContent: '⧉', title: 'Open in its own window' }));
     }
 
     const reload = el('button', { className: 'icon', textContent: '⟳', title: 'Reload' });
@@ -168,6 +170,35 @@ modeTabs.addEventListener('click', () => window.portal.setMode('tabs'));
 modeGrid.addEventListener('click', () => window.portal.setMode('grid'));
 
 pinBtn.addEventListener('click', () => window.portal.toggleAlwaysOnTop());
+document.getElementById('layout').addEventListener('click', () => window.portal.layoutMenu());
+document.getElementById('more').addEventListener('click', () => window.portal.appMenu());
+
+// Inline prompt, e.g. for naming a saved layout.
+const bar = document.querySelector('.bar');
+const promptForm = document.getElementById('prompt');
+const promptInput = document.getElementById('prompt-input');
+let promptKind = null;
+function closePrompt() {
+  promptKind = null;
+  bar.classList.remove('prompting');
+}
+window.portal.onPrompt(({ kind, label, value }) => {
+  promptKind = kind;
+  document.getElementById('prompt-label').textContent = label;
+  promptInput.value = value || '';
+  bar.classList.add('prompting');
+  window.portal.focusToolbar();
+  setTimeout(() => { promptInput.focus(); promptInput.select(); }, 0);
+});
+promptForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!promptKind || !promptInput.value.trim()) return;
+  const kind = promptKind;
+  closePrompt();
+  await window.portal.submitPrompt(kind, promptInput.value);
+});
+document.getElementById('prompt-cancel').addEventListener('click', closePrompt);
+promptInput.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePrompt(); });
 
 addBtn.addEventListener('click', async () => {
   const profile = await window.portal.add();

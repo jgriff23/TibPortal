@@ -11,12 +11,20 @@
     <div class="brand">TibPortal</div>
     <div id="tabs" class="tabs" role="tablist"></div>
     <button id="add" class="add" title="Add profile (Ctrl+T)">+</button>
+    <form id="prompt" class="prompt">
+      <label id="prompt-label" for="prompt-input">Name</label>
+      <input id="prompt-input" maxlength="32" autocomplete="off">
+      <button type="submit" class="menu-btn">Save</button>
+      <button type="button" id="prompt-cancel" class="menu-btn">Cancel</button>
+    </form>
     <div class="spacer"></div>
     <button id="pin" class="pin" title="Keep window on top">📌</button>
+    <button id="layout" class="menu-btn" title="Grid size and saved layouts">Layout ▾</button>
     <div class="modes" role="group" aria-label="View">
       <button id="mode-tabs" class="mode" title="One session at a time (Ctrl+G)">Tabs</button>
       <button id="mode-grid" class="mode" title="Show sessions side by side (Ctrl+G)">Grid</button>
     </div>
+    <button id="more" class="menu-btn" title="Import, export and more">⋯</button>
   </div>
   <script src="ui.js"></script>
 </body>
