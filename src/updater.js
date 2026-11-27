@@ -4,8 +4,9 @@
 //
 // On startup (and every few hours) the app asks GitHub Releases whether a
 // newer version exists. If so it downloads it in the background, then asks
-// whether to restart now. If you choose "Later", the update installs the
-// next time you close the app.
+// whether to restart now. "Restart now" installs silently (no installer
+// wizard) and reopens TibPortal. If you choose "Later", it installs
+// silently the next time you close the app.
 //
 // The portable .exe can't replace itself, so it only checks and tells you
 // where to download the new version.
@@ -66,9 +67,10 @@ function startAutoUpdates(getWindow, onStatus = () => {}) {
       cancelId: 1,
       title: 'Update ready',
       message: `TibPortal ${info.version} has been downloaded.`,
-      detail: 'Restart now to update. Your profiles and logins are kept. If you choose Later, it will update the next time you close TibPortal.',
+      detail: 'Restart now to update. TibPortal closes, installs the update and reopens by itself. Your profiles and logins are kept. If you choose Later, it will update the next time you close TibPortal.',
     });
-    if (response === 0) autoUpdater.quitAndInstall();
+    // Silent install (/S) and relaunch afterwards (--force-run).
+    if (response === 0) autoUpdater.quitAndInstall(true, true);
   });
 
   autoUpdater.on('error', (err) => {
