@@ -109,6 +109,8 @@ function createGameView(profile) {
   });
 
   wc.setAudioMuted(!!profile.muted);
+  // Death and hunt-ended alerts from game-preload.js.
+  wc.ipc.on('game-event', (_e, event) => onGameEvent(profile.id, event));
   wc.on('before-input-event', (e, input) => handleShortcut(e, input));
   wc.on('audio-state-changed', ({ audible }) => {
     if (audible) flagAttention(profile.id, 'is playing sound');
@@ -174,6 +176,45 @@ function flagAttention(id, detail) {
     });
     n.show();
   }
+}
+
+// The game showed its end-of-hunt summary: the character died, or the hunt
+// ended for another reason and the character is now idle.
+const lastGameAlert = new Map(); // `${id}:${kind}` -> time
+const GAME_ALERT_COOLDOWN_MS = 60_000;
+
+function onGameEvent(id, event) {
+  const profile = store.get(id);
+  if (!profile || !event || typeof event !== 'object') return;
+  const kind = event.kind === 'death' ? 'death' : 'ended';
+  const key = `${id}:${kind}`;
+  const now = Date.now();
+  if (now - (lastGameAlert.get(key) || 0) < GAME_ALERT_COOLDOWN_MS) return; // re-renders of the same panel
+  lastGameAlert.set(key, now);
+
+  // Looking right at it: nothing to tell.
+  if (isInView(id)) return;
+  attention.add(id);
+  sendState();
+  if (!profile.notify) return;
+
+  if (!win.isFocused()) win.flashFrame(true);
+  lastNotified.set(id, now); // keep the generic title/sound alert from doubling up
+  if (!Notification.isSupported()) return;
+  const text = String(event.text || '').slice(0, 120);
+  const where = String(event.where || '').slice(0, 120);
+  const n = new Notification({
+    title: kind === 'death' ? `☠ ${profile.name} died` : `${profile.name} is idle`,
+    body: [text || (kind === 'death' ? 'Your character died.' : 'The hunt has ended.'), where]
+      .filter(Boolean).join(' · '),
+    silent: false,
+  });
+  n.on('click', () => {
+    if (win.isMinimized()) win.restore();
+    win.focus();
+    activate(id);
+  });
+  n.show();
 }
 
 function clearAttentionInView() {
