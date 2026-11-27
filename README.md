@@ -30,6 +30,12 @@ Hidden sessions keep running at full speed, so idle progress continues while you
 - **⟳** reloads the current session.
 - **Tabs / Grid** (top right) switches between one session at a time and all sessions side by side. The grid adjusts to how many sessions are showing (2 side by side, 2×2 for 4, up to 5×2 for 10).
 - In grid view, **◉** on a tab hides or shows that profile in the grid. Click inside a grid cell to make it the active one (outlined in blue).
+- **Layout ▾** picks a grid size (Auto, 2×1, 3×1, 2×2, 3×2, 4×2, 3×3 or 5×2). Drag the lines between grid panes to resize them, and double-click a line to even them out.
+- **Saved layouts** (Layout ▾ → Save current layout…) remember the view, grid size, pane sizes, pop-out windows and which account sits where. Pick one from the Layout menu to switch back to it.
+- **Open in its own window** (right-click a tab) pops a tab out, for example onto a second monitor. Close that window to bring the tab back. Pop-outs reopen where you left them.
+- **Zoom** each tab separately with Ctrl+= / Ctrl+-, Ctrl+mouse wheel, or right-click → Zoom. Handy for small grid panes.
+- **⋯ → Export profiles…** saves your profiles (names, colors, settings and saved layouts) to a file. **Import profiles…** adds them on another PC or for a friend. Logins are never included, so imported profiles start logged out.
+- After an update, a **What's new** window lists the changes. You can reopen it from ⋯.
 - **Right-click** a tab for more options: rename, color, mute, desktop notifications, show in grid, reload, delete.
 - **🔊 / 🔇** appears on a tab that is playing sound or muted. Click it to toggle mute.
 - An **orange dot** on a tab means something changed in that session (its page title changed or it played a sound) since you last looked. If the TibPortal window isn't focused, you also get a desktop notification (at most once every 30 seconds per profile) and the taskbar icon flashes.
@@ -47,6 +53,8 @@ Hidden sessions keep running at full speed, so idle progress continues while you
 | Ctrl+T | Add a profile |
 | Ctrl+M | Mute or unmute the active session |
 | F5 or Ctrl+R | Reload the active session |
+| Ctrl+= / Ctrl+- | Zoom the active tab in / out |
+| Ctrl+Shift+0 | Reset the active tab's zoom |
 | F11 | Full screen |
 
 ## Development

@@ -182,3 +182,55 @@ html, body {
 .pin.on { filter: none; border-color: var(--accent); }
 
 .tab input:focus { outline: none; box-shadow: 0 0 0 2px #5b9dff55; }
+
+/* ---- Layout / app menu buttons ---- */
+.menu-btn {
+  flex: none;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--tab);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.menu-btn:hover { background: var(--tab-hover); }
+
+.tab .zoom { flex: none; font-size: 11px; color: var(--muted); }
+.tab .popped { flex: none; color: var(--accent); }
+
+/* ---- Inline prompt (e.g. naming a saved layout) ---- */
+.prompt {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.bar.prompting .prompt { display: flex; }
+.bar.prompting .tabs, .bar.prompting #add { display: none; }
+.prompt label { color: var(--muted); white-space: nowrap; }
+.prompt input {
+  width: 220px;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 5px 6px;
+  outline: none;
+}
+
+/* ---- Placeholder shown when the active tab is popped out ---- */
+body.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+.placeholder-box { text-align: center; color: var(--muted); }
+.placeholder-icon { font-size: 40px; color: var(--accent); }
+.placeholder-box p { font-size: 15px; color: var(--text); margin: 12px 0 16px; }
+.placeholder-actions { display: flex; gap: 8px; justify-content: center; }
+.placeholder-actions .mode { height: 32px; background: var(--tab); }
+.placeholder-actions .mode.on { background: var(--tab-active); }

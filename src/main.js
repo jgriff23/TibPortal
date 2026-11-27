@@ -14,8 +14,12 @@ const {
   screen,
   Notification,
 } = require('electron');
+const fs = require('fs');
 const { startAutoUpdates } = require('./updater');
-const { ProfileStore, partitionFor, gridCells, COLORS, MAX_PROFILES } = require('./profiles');
+const {
+  ProfileStore, partitionFor, gridLayout, resizePanes, clampZoom, SHAPES, COLORS, MAX_PROFILES,
+} = require('./profiles');
+const { notesBetween, shouldShowWhatsNew } = require('./whatsnew');
 
 // The game URL. TIBPORTAL_URL lets us point at a local page while testing.
 const GAME_URL = process.env.TIBPORTAL_URL || 'https://play.tibidle.com/';
@@ -24,7 +28,8 @@ const GAME_DOMAIN = process.env.TIBPORTAL_URL
   ? new URL(GAME_URL).hostname
   : 'tibidle.com';
 const TOOLBAR_HEIGHT = 44;
-const GRID_GAP = 2;
+const GRID_GAP = 6; // wide enough to grab the dividers between panes
+const ICON = path.join(__dirname, '..', 'build', 'icon.png');
 
 let win = null;
 let toolbar = null;
@@ -34,6 +39,12 @@ const views = new Map(); // profile id -> WebContentsView
 const attention = new Set(); // profile ids with something new since last viewed
 const lastNotified = new Map(); // profile id -> time of last desktop notification
 const NOTIFY_COOLDOWN_MS = 30_000;
+const popWins = new Map(); // profile id -> BaseWindow for popped-out tabs
+const dividers = []; // draggable lines between grid panes
+let placeholder = null; // shown in tab view when the active tab is popped out
+let lastGrid = null; // last grid layout, for divider drags
+let drag = null;
+let quitting = false;
 
 // Ask websites for English (Accept-Language and navigator.language).
 app.commandLine.appendSwitch('lang', 'en-US');
@@ -66,12 +77,19 @@ function createGameView(profile) {
       additionalArguments: [`--tibportal-game-domain=${GAME_DOMAIN}`],
       // Keep hidden sessions running at full speed so idle progress continues.
       backgroundThrottling: false,
+      zoomFactor: profile.zoom || 1,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
   });
   const wc = view.webContents;
+  wc.on('did-finish-load', () => {
+    const p = store.get(profile.id);
+    if (p) wc.setZoomFactor(p.zoom || 1);
+  });
+  // Ctrl + mouse wheel zooms just this tab.
+  wc.on('zoom-changed', (_e, direction) => changeZoom(profile.id, direction === 'in' ? 0.1 : -0.1));
 
   // Popups from the game (e.g. login windows) stay in the same profile's
   // session; anything outside the game opens in the normal browser.
@@ -112,7 +130,7 @@ function createGameView(profile) {
   wc.on('focus', () => {
     if (store.activeId !== profile.id && store.get(profile.id)) {
       store.setActive(profile.id);
-      layout();
+      if (!store.isPoppedOut(profile.id)) layout();
       sendState();
     }
   });
@@ -128,6 +146,8 @@ function createGameView(profile) {
 }
 
 function isInView(id) {
+  const pop = popWins.get(id);
+  if (pop) return pop.isFocused();
   if (!win || !win.isFocused()) return false;
   if (store.view.mode === 'grid') return !store.view.hiddenInGrid.includes(id);
   return store.activeId === id;
@@ -168,6 +188,14 @@ function clearAttentionInView() {
 
 function activate(id) {
   if (!store.get(id)) return;
+  const pop = popWins.get(id);
+  if (pop) {
+    if (pop.isMinimized()) pop.restore();
+    pop.focus();
+    store.setActive(id);
+    sendState();
+    return;
+  }
   if (store.view.mode === 'grid' && store.view.hiddenInGrid.includes(id)) {
     store.setShownInGrid(id, true);
   }
@@ -187,6 +215,18 @@ function setMuted(id, muted) {
   const view = views.get(id);
   if (view) view.webContents.setAudioMuted(muted);
   sendState();
+}
+
+function setZoom(id, zoom) {
+  const p = store.update(id, { zoom: clampZoom(zoom) });
+  const view = views.get(id);
+  if (view) view.webContents.setZoomFactor(p.zoom);
+  sendState();
+}
+
+function changeZoom(id, delta) {
+  const p = store.get(id);
+  if (p) setZoom(id, Math.round(((p.zoom || 1) + delta) * 10) / 10);
 }
 
 function setAlwaysOnTop(on) {
@@ -210,7 +250,13 @@ function handleShortcut(event, input) {
   const ctrl = input.control || input.meta;
   const key = input.key;
   let handled = true;
-  if (ctrl && !input.alt && /^[0-9]$/.test(key)) {
+  if (ctrl && input.shift && input.code === 'Digit0') {
+    if (store.activeId) setZoom(store.activeId, 1);
+  } else if (ctrl && (key === '=' || key === '+')) {
+    if (store.activeId) changeZoom(store.activeId, 0.1);
+  } else if (ctrl && (key === '-' || key === '_')) {
+    if (store.activeId) changeZoom(store.activeId, -0.1);
+  } else if (ctrl && !input.alt && /^[0-9]$/.test(key)) {
     const index = key === '0' ? 9 : Number(key) - 1;
     const p = store.list()[index];
     if (p) activate(p.id);
@@ -270,6 +316,24 @@ function showProfileMenu(id) {
       checked: !store.view.hiddenInGrid.includes(id),
       click: (item) => { store.setShownInGrid(id, item.checked); showActive(); },
     },
+    {
+      label: 'Zoom',
+      submenu: [
+        ...[0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5].map((z) => ({
+          label: `${Math.round(z * 100)}%`,
+          type: 'radio',
+          checked: Math.abs((profile.zoom || 1) - z) < 0.01,
+          click: () => setZoom(id, z),
+        })),
+        { type: 'separator' },
+        { label: 'Zoom in (Ctrl+=)', click: () => changeZoom(id, 0.1) },
+        { label: 'Zoom out (Ctrl+-)', click: () => changeZoom(id, -0.1) },
+        { label: 'Reset (Ctrl+Shift+0)', click: () => setZoom(id, 1) },
+      ],
+    },
+    store.isPoppedOut(id)
+      ? { label: 'Bring back to main window', click: () => bringBack(id) }
+      : { label: 'Open in its own window', click: () => popOut(id) },
     { label: 'Reload', enabled: views.has(id), click: () => views.get(id) && views.get(id).webContents.reload() },
     { type: 'separator' },
     { label: 'Delete profile…', click: () => removeProfile(id) },
@@ -290,6 +354,12 @@ async function removeProfile(id) {
     detail: 'Its saved login will be removed from this computer. Your game account is not affected.',
   });
   if (response !== 0) return false;
+  const pop = popWins.get(id);
+  if (pop) {
+    popWins.delete(id);
+    pop.contentView.removeChildView(views.get(id));
+    pop.destroy();
+  }
   store.remove(id);
   attention.delete(id);
   await destroyProfileData(id);
@@ -333,10 +403,19 @@ function gameArea() {
 
 function ensureAttached(id) {
   const view = viewFor(id);
-  if (view && !win.contentView.children.includes(view)) {
+  if (view && !store.isPoppedOut(id) && !win.contentView.children.includes(view)) {
     win.contentView.addChildView(view);
   }
   return view;
+}
+
+function gridInset(area) {
+  return {
+    x: area.x + GRID_GAP,
+    y: area.y + GRID_GAP,
+    width: area.width - GRID_GAP * 2,
+    height: area.height - GRID_GAP * 2,
+  };
 }
 
 function layout() {
@@ -345,36 +424,36 @@ function layout() {
   toolbar.setBounds({ x: 0, y: 0, width, height: TOOLBAR_HEIGHT });
   const area = gameArea();
   const placements = new Map();
+  const v = store.view;
+  let showPlaceholder = false;
+  lastGrid = null;
 
-  if (store.view.mode === 'grid') {
+  if (v.mode === 'grid') {
     const shown = store.gridProfiles();
-    const inset = {
-      x: area.x + GRID_GAP,
-      y: area.y + GRID_GAP,
-      width: area.width - GRID_GAP * 2,
-      height: area.height - GRID_GAP * 2,
-    };
-    const cells = gridCells(shown.length, inset, GRID_GAP);
-    shown.forEach((p, i) => placements.set(p.id, cells[i]));
+    const inset = gridInset(area);
+    lastGrid = { ...gridLayout(shown.length, inset, GRID_GAP, v), inset };
+    lastGrid.cells.forEach((cell, i) => placements.set(shown[i].id, cell));
   } else if (store.activeId) {
-    placements.set(store.activeId, area);
+    if (store.isPoppedOut(store.activeId)) showPlaceholder = true;
+    else placements.set(store.activeId, area);
   }
 
   for (const id of placements.keys()) ensureAttached(id);
   for (const [id, view] of views) {
+    if (store.isPoppedOut(id)) continue;
     const bounds = placements.get(id);
     view.setVisible(!!bounds);
     if (bounds) view.setBounds(bounds);
   }
 
   // Outline the active cell in grid mode.
-  const activeCell = store.view.mode === 'grid' && placements.size > 1 && placements.get(store.activeId);
+  const activeCell = v.mode === 'grid' && placements.size > 1 && placements.get(store.activeId);
   if (activeCell) {
     frame.setBounds({
-      x: activeCell.x - GRID_GAP,
-      y: activeCell.y - GRID_GAP,
-      width: activeCell.width + GRID_GAP * 2,
-      height: activeCell.height + GRID_GAP * 2,
+      x: activeCell.x - 2,
+      y: activeCell.y - 2,
+      width: activeCell.width + 4,
+      height: activeCell.height + 4,
     });
     // Keep the frame at the back, behind the game views.
     win.contentView.addChildView(frame, 0);
@@ -382,6 +461,314 @@ function layout() {
   } else {
     frame.setVisible(false);
   }
+
+  layoutDividers();
+  layoutPlaceholder(showPlaceholder ? area : null);
+}
+
+// ---- Draggable dividers between grid panes ----
+
+function dividerView(i) {
+  if (!dividers[i]) {
+    const d = new WebContentsView({
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+    d.setBackgroundColor('#00000000');
+    d.webContents.loadFile(path.join(__dirname, 'ui', 'divider.html'));
+    dividers[i] = d;
+  }
+  return dividers[i];
+}
+
+function layoutDividers() {
+  const lines = [];
+  if (lastGrid && lastGrid.cells.length > 0) {
+    const { inset } = lastGrid;
+    lastGrid.colDividers.forEach((x, index) => lines.push({
+      kind: 'col', index,
+      bounds: { x: Math.round(x - GRID_GAP / 2), y: inset.y, width: GRID_GAP, height: inset.height },
+    }));
+    lastGrid.rowDividers.forEach((y, index) => lines.push({
+      kind: 'row', index,
+      bounds: { x: inset.x, y: Math.round(y - GRID_GAP / 2), width: inset.width, height: GRID_GAP },
+    }));
+  }
+  lines.forEach((line, i) => {
+    const d = dividerView(i);
+    if (!win.contentView.children.includes(d)) win.contentView.addChildView(d);
+    else win.contentView.addChildView(d); // keep dividers on top
+    d.setBounds(line.bounds);
+    d.setVisible(true);
+    const send = () => d.webContents.send('divider', { kind: line.kind, index: line.index });
+    if (d.webContents.isLoading()) d.webContents.once('did-finish-load', send);
+    else send();
+  });
+  for (let i = lines.length; i < dividers.length; i++) dividers[i].setVisible(false);
+}
+
+function onDividerDrag(phase, { kind, index, screenX, screenY } = {}) {
+  if (!lastGrid) return;
+  if (phase === 'reset') {
+    store.setPaneSizes(null, null);
+    layout();
+    return;
+  }
+  if (phase === 'start') {
+    drag = { kind, index };
+    return;
+  }
+  if (!drag) return;
+  if (phase === 'move') {
+    const content = win.getContentBounds();
+    const { inset, cols, rows } = lastGrid;
+    if (drag.kind === 'col') {
+      const usable = inset.width - GRID_GAP * (cols - 1);
+      const pos = screenX - content.x - inset.x - GRID_GAP * (drag.index + 0.5);
+      const sizes = resizePanes(lastGrid.colSizes, drag.index, pos, usable);
+      store.setPaneSizes(sizes, store.view.rowSizes && store.view.rowSizes.length === rows ? store.view.rowSizes : lastGrid.rowSizes, { persist: false });
+    } else {
+      const usable = inset.height - GRID_GAP * (rows - 1);
+      const pos = screenY - content.y - inset.y - GRID_GAP * (drag.index + 0.5);
+      const sizes = resizePanes(lastGrid.rowSizes, drag.index, pos, usable);
+      store.setPaneSizes(store.view.colSizes && store.view.colSizes.length === cols ? store.view.colSizes : lastGrid.colSizes, sizes, { persist: false });
+    }
+    layout();
+  } else if (phase === 'end') {
+    drag = null;
+    const v = store.view;
+    store.setPaneSizes(v.colSizes, v.rowSizes);
+  }
+}
+
+// ---- Pop-out windows ----
+
+function layoutPlaceholder(bounds) {
+  if (!bounds) {
+    if (placeholder) placeholder.setVisible(false);
+    return;
+  }
+  if (!placeholder) {
+    placeholder = new WebContentsView({
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+    placeholder.webContents.loadFile(path.join(__dirname, 'ui', 'placeholder.html'));
+    placeholder.webContents.on('did-finish-load', () => sendState());
+  }
+  if (!win.contentView.children.includes(placeholder)) win.contentView.addChildView(placeholder);
+  placeholder.setBounds(bounds);
+  placeholder.setVisible(true);
+}
+
+function popOut(id, savedBounds) {
+  const profile = store.get(id);
+  if (!profile || popWins.has(id)) return;
+  const view = viewFor(id);
+  if (win.contentView.children.includes(view)) win.contentView.removeChildView(view);
+
+  const bounds = savedBounds && isOnScreen(savedBounds) ? savedBounds : { width: 960, height: 680 };
+  const pop = new BaseWindow({
+    ...bounds,
+    minWidth: 320,
+    minHeight: 240,
+    title: `${profile.name} - TibPortal`,
+    icon: ICON,
+    backgroundColor: '#14161a',
+  });
+  pop.contentView.addChildView(view);
+  view.setVisible(true);
+  const fit = () => {
+    const { width, height } = pop.getContentBounds();
+    view.setBounds({ x: 0, y: 0, width, height });
+  };
+  fit();
+  pop.on('resize', fit);
+  pop.on('focus', () => {
+    clearAttentionInView();
+    if (store.activeId !== id) { store.setActive(id); sendState(); }
+  });
+  pop.on('close', () => {
+    if (quitting) {
+      // Remember where it was so it reopens there next time.
+      store.setPopout(id, pop.getNormalBounds());
+      return;
+    }
+    pop.contentView.removeChildView(view);
+    popWins.delete(id);
+    store.setPopout(id, null);
+    showActive({ focusGame: false });
+  });
+  popWins.set(id, pop);
+  store.setPopout(id, pop.getNormalBounds());
+  view.webContents.focus();
+  showActive({ focusGame: false });
+}
+
+function bringBack(id) {
+  const pop = popWins.get(id);
+  if (pop) pop.close(); // the close handler moves the tab back
+}
+
+function syncPopouts() {
+  const wanted = store.view.popouts;
+  for (const id of [...popWins.keys()]) if (!(id in wanted)) bringBack(id);
+  for (const [id, bounds] of Object.entries(wanted)) if (!popWins.has(id)) popOut(id, bounds);
+}
+
+// ---- Layout and app menus ----
+
+const SHAPE_LABELS = {
+  auto: 'Auto (fits the number of tabs)', '2x1': '2 × 1', '3x1': '3 × 1', '2x2': '2 × 2',
+  '3x2': '3 × 2', '4x2': '4 × 2', '3x3': '3 × 3', '5x2': '5 × 2',
+};
+
+function showLayoutMenu() {
+  const v = store.view;
+  const layouts = store.listLayouts();
+  Menu.buildFromTemplate([
+    {
+      label: 'Grid size',
+      submenu: SHAPES.map((shape) => ({
+        label: SHAPE_LABELS[shape],
+        type: 'radio',
+        checked: v.shape === shape,
+        click: () => { store.setShape(shape); store.setMode('grid'); showActive(); },
+      })),
+    },
+    { label: 'Even out pane sizes', enabled: !!(v.colSizes || v.rowSizes), click: () => onDividerDrag('reset') },
+    { type: 'separator' },
+    { label: 'Saved layouts', enabled: false },
+    ...(layouts.length
+      ? layouts.map((l) => ({ label: `   ${l.name}`, click: () => applySavedLayout(l.name) }))
+      : [{ label: '   (none yet)', enabled: false }]),
+    { type: 'separator' },
+    { label: 'Save current layout…', click: () => askFor('saveLayout', 'Layout name', '') },
+    {
+      label: 'Delete a saved layout',
+      enabled: layouts.length > 0,
+      submenu: layouts.map((l) => ({ label: l.name, click: () => { store.deleteLayout(l.name); sendState(); } })),
+    },
+  ]).popup({ window: win });
+}
+
+function applySavedLayout(name) {
+  store.applyLayout(name);
+  syncPopouts();
+  showActive();
+}
+
+function askFor(kind, label, value) {
+  toolbar.webContents.focus();
+  toolbar.webContents.send('prompt', { kind, label, value });
+}
+
+function showAppMenu() {
+  Menu.buildFromTemplate([
+    { label: 'Export profiles…', click: exportProfiles },
+    { label: 'Import profiles…', click: importProfiles },
+    { type: 'separator' },
+    { label: "What's new", click: () => showWhatsNew(null) },
+    { label: `TibPortal ${app.getVersion()}`, enabled: false },
+  ]).popup({ window: win });
+}
+
+async function exportProfiles() {
+  const { canceled, filePath } = await dialog.showSaveDialog(win, {
+    title: 'Export profiles',
+    defaultPath: path.join(app.getPath('documents'), 'TibPortal-profiles.json'),
+    filters: [{ name: 'TibPortal profiles', extensions: ['json'] }],
+  });
+  if (canceled || !filePath) return;
+  const data = store.exportData();
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  } catch (err) {
+    dialog.showErrorBox('Export failed', String(err.message || err));
+    return;
+  }
+  dialog.showMessageBox(win, {
+    type: 'info',
+    title: 'Profiles exported',
+    message: `Exported ${data.profiles.length} profile${data.profiles.length === 1 ? '' : 's'} and ${data.layouts.length} saved layout${data.layouts.length === 1 ? '' : 's'}.`,
+    detail: 'The file has names, colors and settings only. Logins and passwords are never included, so it is safe to share.',
+  });
+}
+
+async function importProfiles() {
+  const { canceled, filePaths } = await dialog.showOpenDialog(win, {
+    title: 'Import profiles',
+    properties: ['openFile'],
+    filters: [{ name: 'TibPortal profiles', extensions: ['json'] }],
+  });
+  if (canceled || !filePaths || !filePaths[0]) return;
+  let data;
+  try {
+    data = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'));
+    if (!data || data.app !== 'TibPortal' || !Array.isArray(data.profiles)) throw new Error("This file isn't a TibPortal profile export.");
+  } catch (err) {
+    dialog.showErrorBox('Import failed', err instanceof SyntaxError ? "This file isn't a TibPortal profile export." : String(err.message || err));
+    return;
+  }
+  const room = MAX_PROFILES - store.list().length;
+  if (room <= 0) {
+    dialog.showMessageBox(win, { type: 'warning', title: 'No room', message: `You already have ${MAX_PROFILES} profiles, the most TibPortal allows. Delete some first.` });
+    return;
+  }
+  const count = data.profiles.length;
+  const layoutCount = Array.isArray(data.layouts) ? data.layouts.length : 0;
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'question',
+    buttons: ['Import', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1,
+    title: 'Import profiles',
+    message: `Add ${count} profile${count === 1 ? '' : 's'}${layoutCount ? ` and ${layoutCount} saved layout${layoutCount === 1 ? '' : 's'}` : ''} to TibPortal?`,
+    detail: `They're added next to your current profiles. Imported profiles start logged out, so you'll log in once in each.${count > room ? `\n\nOnly ${room} will fit (the limit is ${MAX_PROFILES}).` : ''}`,
+  });
+  if (response !== 0) return;
+  const result = store.importData(data);
+  showActive();
+  if (result.skipped > 0) {
+    dialog.showMessageBox(win, {
+      type: 'info',
+      title: 'Import finished',
+      message: `Added ${result.added} profile${result.added === 1 ? '' : 's'}. ${result.skipped} didn't fit and were skipped.`,
+      detail: 'Saved layouts are only imported when all of their profiles fit.',
+    });
+  }
+}
+
+function showWhatsNew(since) {
+  const version = app.getVersion();
+  const entries = notesBetween(since, version);
+  if (entries.length === 0) return;
+  const detail = entries
+    .map((e) => (entries.length > 1 ? `Version ${e.version}\n` : '') + e.notes.map((n) => `•  ${n}`).join('\n'))
+    .join('\n\n');
+  dialog.showMessageBox(win, {
+    type: 'info',
+    title: "What's new",
+    message: `What's new in TibPortal ${version}`,
+    detail,
+    buttons: ['OK'],
+  });
+}
+
+function maybeShowWhatsNew() {
+  const current = app.getVersion();
+  const lastSeen = store.lastSeenVersion;
+  const show = shouldShowWhatsNew({ lastSeen, current, isFirstRun: !store.existedBefore });
+  store.setLastSeenVersion(current);
+  if (show) setTimeout(() => showWhatsNew(lastSeen), 1500);
 }
 
 function showActive({ focusGame = true } = {}) {
@@ -394,20 +781,25 @@ function showActive({ focusGame = true } = {}) {
 
 function sendState() {
   if (!toolbar || toolbar.webContents.isDestroyed()) return;
-  toolbar.webContents.send('state', {
+  const state = {
     profiles: store.list().map((p) => ({
       ...p,
       loaded: views.has(p.id),
       title: views.has(p.id) ? views.get(p.id).webContents.getTitle() : '',
       audible: views.has(p.id) ? views.get(p.id).webContents.isCurrentlyAudible() : false,
       attention: attention.has(p.id),
+      poppedOut: store.isPoppedOut(p.id),
     })),
+    shape: store.view.shape,
     activeId: store.activeId,
     alwaysOnTop: !!store.view.alwaysOnTop,
     mode: store.view.mode,
     hiddenInGrid: store.view.hiddenInGrid,
+    layouts: store.listLayouts(),
     max: MAX_PROFILES,
-  });
+  };
+  toolbar.webContents.send('state', state);
+  if (placeholder && !placeholder.webContents.isDestroyed()) placeholder.webContents.send('state', state);
 }
 
 async function destroyProfileData(id) {
@@ -471,6 +863,19 @@ function registerIpc() {
   });
 
   ipcMain.handle('state:get', () => sendState());
+
+  ipcMain.handle('menu:layout', () => showLayoutMenu());
+  ipcMain.handle('menu:app', () => showAppMenu());
+  ipcMain.handle('profiles:bringBack', (_e, id) => bringBack(id));
+  ipcMain.handle('prompt:submit', (_e, kind, value) => {
+    if (kind === 'saveLayout') {
+      const saved = store.saveLayout(value);
+      sendState();
+      return saved;
+    }
+    return null;
+  });
+  ipcMain.on('divider', (_e, phase, data) => onDividerDrag(phase, data));
 }
 
 function isOnScreen(b) {
@@ -486,7 +891,7 @@ function createWindow() {
     minWidth: 640,
     minHeight: 400,
     title: 'TibPortal',
-    icon: path.join(__dirname, '..', 'build', 'icon.png'),
+    icon: ICON,
     backgroundColor: '#14161a',
   });
 
@@ -518,6 +923,9 @@ function createWindow() {
   });
   win.on('close', () => {
     store.setWindowState(win.getNormalBounds(), win.isMaximized());
+    // Closing the main window closes pop-outs too, but remembers them.
+    quitting = true;
+    for (const pop of popWins.values()) pop.close();
   });
   win.on('closed', () => {
     win = null;
@@ -534,6 +942,8 @@ app.whenReady().then(() => {
   if (store.list().length === 0) store.add('Main');
   registerIpc();
   createWindow();
+  syncPopouts();
+  maybeShowWhatsNew();
   startAutoUpdates(() => win);
 });
 
