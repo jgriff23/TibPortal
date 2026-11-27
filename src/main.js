@@ -14,6 +14,7 @@ const {
   screen,
   Notification,
 } = require('electron');
+const { startAutoUpdates } = require('./updater');
 const { ProfileStore, partitionFor, gridCells, COLORS, MAX_PROFILES } = require('./profiles');
 
 // The game URL. TIBPORTAL_URL lets us point at a local page while testing.
@@ -533,6 +534,7 @@ app.whenReady().then(() => {
   if (store.list().length === 0) store.add('Main');
   registerIpc();
   createWindow();
+  startAutoUpdates(() => win);
 });
 
 app.on('window-all-closed', () => app.quit());

@@ -1,6 +1,6 @@
 {
   "name": "tibportal",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Run several TibIdle sessions side by side, each with its own saved login.",
   "main": "src/main.js",
   "author": "jgriff23",
@@ -9,8 +9,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "dist": "electron-builder --win",
-    "dist:dir": "electron-builder --win --dir"
+    "dist": "electron-builder --win --publish never",
+    "dist:dir": "electron-builder --win --dir --publish never"
   },
   "devDependencies": {
     "electron": "45.5.0",
@@ -58,6 +58,16 @@
     "portable": {
       "artifactName": "TibPortal-Portable-${version}.${ext}"
     },
-    "publish": null
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "jgriff23",
+        "repo": "TibPortal",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.6.2"
   }
 }
