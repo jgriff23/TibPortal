@@ -3,6 +3,10 @@
 // Shown in the "What's new" popup after an update. Newest first.
 module.exports = [
   {
+    version: '0.4.2',
+    notes: ['A small release to check the silent update: if you came from 0.4.1, this one installed with no wizard.'],
+  },
+  {
     version: '0.4.1',
     notes: ['Updates install silently now. After you click Restart now, TibPortal installs the update and reopens by itself, with no installer wizard.'],
   },
