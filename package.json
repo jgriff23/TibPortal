@@ -1,6 +1,6 @@
 {
   "name": "tibportal",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Run several TibIdle sessions side by side, each with its own saved login.",
   "main": "src/main.js",
   "author": "jgriff23",

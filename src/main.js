@@ -17,8 +17,11 @@ const {
 const { ProfileStore, partitionFor, gridCells, COLORS, MAX_PROFILES } = require('./profiles');
 
 // The game URL. TIBPORTAL_URL lets us point at a local page while testing.
-const GAME_URL = process.env.TIBPORTAL_URL || 'https://tibidle.com';
-const GAME_ORIGIN = new URL(GAME_URL).origin;
+const GAME_URL = process.env.TIBPORTAL_URL || 'https://play.tibidle.com/';
+// The site and the game share this domain (tibidle.com, play.tibidle.com).
+const GAME_DOMAIN = process.env.TIBPORTAL_URL
+  ? new URL(GAME_URL).hostname
+  : 'tibidle.com';
 const TOOLBAR_HEIGHT = 44;
 const GRID_GAP = 2;
 
@@ -30,6 +33,9 @@ const views = new Map(); // profile id -> WebContentsView
 const attention = new Set(); // profile ids with something new since last viewed
 const lastNotified = new Map(); // profile id -> time of last desktop notification
 const NOTIFY_COOLDOWN_MS = 30_000;
+
+// Ask websites for English (Accept-Language and navigator.language).
+app.commandLine.appendSwitch('lang', 'en-US');
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -45,7 +51,7 @@ app.on('second-instance', () => {
 function isGameUrl(url) {
   try {
     const u = new URL(url);
-    return u.origin === GAME_ORIGIN || u.hostname.endsWith('.' + new URL(GAME_URL).hostname);
+    return u.hostname === GAME_DOMAIN || u.hostname.endsWith('.' + GAME_DOMAIN);
   } catch {
     return false;
   }
@@ -55,6 +61,8 @@ function createGameView(profile) {
   const view = new WebContentsView({
     webPreferences: {
       partition: partitionFor(profile.id),
+      preload: path.join(__dirname, 'game-preload.js'),
+      additionalArguments: [`--tibportal-game-domain=${GAME_DOMAIN}`],
       // Keep hidden sessions running at full speed so idle progress continues.
       backgroundThrottling: false,
       contextIsolation: true,
@@ -113,7 +121,7 @@ function createGameView(profile) {
     }
   });
 
-  wc.loadURL(GAME_URL);
+  setEnglishDefaults(wc.session).finally(() => wc.loadURL(GAME_URL));
   views.set(profile.id, view);
   return view;
 }
@@ -286,6 +294,29 @@ async function removeProfile(id) {
   await destroyProfileData(id);
   showActive();
   return true;
+}
+
+// The tibidle.com website picks its language from the NEXT_LOCALE cookie.
+// Set it to English for each profile, unless the player has already chosen.
+async function setEnglishDefaults(ses) {
+  if (process.env.TIBPORTAL_URL) return;
+  try {
+    const existing = await ses.cookies.get({ url: 'https://tibidle.com', name: 'NEXT_LOCALE' });
+    if (existing.length === 0) {
+      await ses.cookies.set({
+        url: 'https://tibidle.com',
+        name: 'NEXT_LOCALE',
+        value: 'en',
+        domain: '.tibidle.com',
+        path: '/',
+        secure: true,
+        sameSite: 'lax',
+        expirationDate: Math.floor(Date.now() / 1000) + 10 * 365 * 24 * 3600,
+      });
+    }
+  } catch (err) {
+    console.warn('Could not set language cookie:', err);
+  }
 }
 
 function viewFor(id) {
