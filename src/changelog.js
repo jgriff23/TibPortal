@@ -4,7 +4,11 @@
 module.exports = [
   {
     version: '0.4.2',
-    notes: ['A small release to check the silent update: if you came from 0.4.1, this one installed with no wizard.'],
+    notes: [
+      'New "Check for updates…" item in the ⋯ menu.',
+      'TibPortal now looks for updates every 30 minutes while it\'s open (and when you come back to the window), so you no longer need to restart it to see a new version.',
+      'Updating from 0.4.1 onward installs silently and reopens TibPortal by itself.',
+    ],
   },
   {
     version: '0.4.1',
