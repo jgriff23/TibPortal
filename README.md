@@ -39,6 +39,7 @@ Hidden sessions keep running at full speed, so idle progress continues while you
 - **Right-click** a tab for more options: rename, color, mute, desktop notifications, show in grid, reload, delete.
 - **🔊 / 🔇** appears on a tab that is playing sound or muted. Click it to toggle mute.
 - An **orange dot** on a tab means something changed in that session (its page title changed or it played a sound) since you last looked. If the TibPortal window isn't focused, you also get a desktop notification (at most once every 30 seconds per profile) and the taskbar icon flashes.
+- **Death and idle alerts:** when a character dies, or a hunt, training or tower run ends and the character goes idle, you get a desktop notification. You get it whenever you aren't looking at that tab, even if TibPortal is open. TibPortal spots this by watching for the game's end-of-hunt summary. It only reads the page and never clicks anything in the game.
 - **📌** keeps the window on top of other windows.
 - The app remembers the view mode, which profiles are in the grid, and the window size and position.
 - **×** deletes a profile and its saved login. Your game account is not affected.

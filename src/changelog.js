@@ -3,6 +3,14 @@
 // Shown in the "What's new" popup after an update. Newest first.
 module.exports = [
   {
+    version: '0.4.4',
+    notes: [
+      'Desktop notification when a character dies on a hunt.',
+      'Desktop notification when a hunt, training or tower run ends and the character goes idle.',
+      'These alerts also show when TibPortal is open but you are looking at a different tab. Turn them off per tab with right-click → Desktop notifications.',
+    ],
+  },
+  {
     version: '0.4.3',
     notes: [
       'Installing an update now shows a progress bar, then TibPortal reopens by itself. There are still no questions to click through.',
