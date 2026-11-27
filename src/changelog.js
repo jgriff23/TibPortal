@@ -3,6 +3,14 @@
 // Shown in the "What's new" popup after an update. Newest first.
 module.exports = [
   {
+    version: '0.4.2',
+    notes: [
+      'New "Check for updates…" item in the ⋯ menu.',
+      'TibPortal now looks for updates every 30 minutes while it\'s open (and when you come back to the window), so you no longer need to restart it to see a new version.',
+      'Updating from 0.4.1 onward installs silently and reopens TibPortal by itself.',
+    ],
+  },
+  {
     version: '0.4.1',
     notes: ['Updates install silently now. After you click Restart now, TibPortal installs the update and reopens by itself, with no installer wizard.'],
   },

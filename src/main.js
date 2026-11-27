@@ -32,6 +32,7 @@ const GRID_GAP = 6; // wide enough to grab the dividers between panes
 const ICON = path.join(__dirname, '..', 'build', 'icon.png');
 
 let win = null;
+let updates = null; // set once the app is ready
 let toolbar = null;
 let frame = null; // accent outline behind the active grid cell
 let store = null;
@@ -677,6 +678,12 @@ function showAppMenu() {
     { label: 'Import profiles…', click: importProfiles },
     { type: 'separator' },
     { label: "What's new", click: () => showWhatsNew(null) },
+    {
+      label: updates && updates.status().state === 'ready'
+        ? `Restart to install ${updates.status().version}`
+        : 'Check for updates…',
+      click: () => updates && updates.checkNow(),
+    },
     { label: `TibPortal ${app.getVersion()}`, enabled: false },
   ]).popup({ window: win });
 }
@@ -920,6 +927,7 @@ function createWindow() {
   win.on('focus', () => {
     win.flashFrame(false);
     clearAttentionInView();
+    if (updates) updates.nudge();
   });
   win.on('close', () => {
     store.setWindowState(win.getNormalBounds(), win.isMaximized());
@@ -944,7 +952,7 @@ app.whenReady().then(() => {
   createWindow();
   syncPopouts();
   maybeShowWhatsNew();
-  startAutoUpdates(() => win);
+  updates = startAutoUpdates(() => win);
 });
 
 app.on('window-all-closed', () => app.quit());
