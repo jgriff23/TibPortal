@@ -15,6 +15,8 @@ The app isn't code-signed yet, so Windows SmartScreen may say "Windows protected
 
 Each **profile** (for example "Main" or "Alt 1") gets its own separate browser storage: cookies, local storage and cache. Logins never clash between profiles, and every profile stays logged in between launches. You can have up to 10 profiles.
 
+Each tab opens the game at [play.tibidle.com](https://play.tibidle.com) in **English** by default. You can still change the language inside the game, and each profile remembers its own choice.
+
 Hidden sessions keep running at full speed, so idle progress continues while you look at another tab.
 
 ## Using it
