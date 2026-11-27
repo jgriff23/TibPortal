@@ -9,7 +9,7 @@ Grab the latest build from the [Releases page](../../releases):
 - **TibPortal-Setup-x.y.z.exe** installs TibPortal with Start menu and desktop shortcuts.
 - **TibPortal-Portable-x.y.z.exe** runs without installing. Your profiles are stored in your user folder either way.
 
-**Updates:** the installed version updates itself. It checks GitHub for a new release when it starts (and every few hours), downloads it in the background, and asks whether to restart. If you pick Later, it updates the next time you close TibPortal. The portable version can't replace itself, so it tells you when a new version is out and links to this page. Auto-update starts with v0.3.0, so install v0.3.0 once by hand.
+**Updates:** the installed version updates itself. It checks GitHub for a new release when it starts (and every few hours), downloads it in the background, and asks whether to restart. Restart now installs it silently and reopens TibPortal on its own. If you pick Later, it updates the next time you close TibPortal. The portable version can't replace itself, so it tells you when a new version is out and links to this page. Auto-update starts with v0.3.0, so install v0.3.0 once by hand.
 
 The app isn't code-signed yet, so Windows SmartScreen may say "Windows protected your PC" the first time. Click **More info → Run anyway**.
 

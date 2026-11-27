@@ -3,6 +3,10 @@
 // Shown in the "What's new" popup after an update. Newest first.
 module.exports = [
   {
+    version: '0.4.1',
+    notes: ['Updates install silently now. After you click Restart now, TibPortal installs the update and reopens by itself, with no installer wizard.'],
+  },
+  {
     version: '0.4.0',
     notes: [
       'More grid sizes: pick 2×1, 3×1, 2×2, 3×2, 4×2, 3×3 or 5×2 from the Layout menu, or leave it on Auto.',
